@@ -1,6 +1,11 @@
 localhost {
     reverse_proxy localhost:5000
-    header Access-Control-Allow-Origin *  
+
+    # Ensure only GitHub Pages can access the API
+    header -Access-Control-Allow-Origin
+    header Access-Control-Allow-Origin "https://kyattpl.github.io"
+
+    # Allow necessary request methods and headers
     header Access-Control-Allow-Methods "GET, POST, OPTIONS"
     header Access-Control-Allow-Headers "Content-Type"
 }
