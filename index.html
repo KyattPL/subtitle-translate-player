@@ -442,7 +442,7 @@
 
         // Real translation API implementation
         function translateWithLibreTranslate(text, sourceLang, targetLang) {
-            return fetch('http://localhost:5000/translate', {
+            return fetch('https://localhost:5000/translate', {
                 method: 'POST',
                 body: JSON.stringify({
                     q: text,
