@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subtitle Translator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .video-container {
+            position: relative;
+            width: 100%;
+            background-color: #000;
+            margin-bottom: 20px;
+        }
+
+        video {
+            width: 100%;
+            display: block;
+        }
+
+        .subtitle-container {
+            position: absolute;
+            bottom: 60px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            z-index: 10;
+            padding: 0 20px;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .subtitle-text {
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 4px;
+            display: inline-block;
+            margin-bottom: 8px;
+            cursor: pointer;
+            max-width: 80%;
+            pointer-events: auto;
+            font-size: 2rem;
+            /* Re-enable clicks on this element */
+        }
+
+        .translation-text {
+            background-color: rgba(60, 60, 180, 0.8);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 4px;
+            display: none;
+            margin-bottom: 8px;
+            max-width: 80%;
+            pointer-events: auto;
+            font-size: 2rem;
+            /* Re-enable clicks on this element */
+        }
+
+        .controls {
+            margin-bottom: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+
+        button,
+        select {
+            padding: 8px 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .toggle-translation {
+            position: absolute;
+            bottom: 110px;
+            right: 20px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            border: none;
+            padding: 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            z-index: 20;
+            pointer-events: auto;
+            /* Ensure clicks work in fullscreen */
+        }
+
+        .debug-info {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #f0f0f0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .language-selector {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-left: 10px;
+        }
+
+        .language-label {
+            font-weight: bold;
+        }
+
+        /* Fullscreen styles */
+        video::-webkit-media-controls-enclosure {
+            z-index: 5 !important;
+            /* Keep controls below our UI */
+        }
+
+        :fullscreen .subtitle-container,
+        :-webkit-full-screen .subtitle-container,
+        :-moz-full-screen .subtitle-container,
+        :-ms-fullscreen .subtitle-container {
+            bottom: 120px;
+            /* Adjusts subtitle position in fullscreen */
+        }
+
+        :fullscreen .toggle-translation,
+        :-webkit-full-screen .toggle-translation,
+        :-moz-full-screen .toggle-translation,
+        :-ms-fullscreen .toggle-translation {
+            bottom: 160px;
+            /* Adjusts button position in fullscreen */
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Subtitle Translator</h1>
+
+        <div class="controls">
+            <button id="videoBtn">Open Video</button>
+            <input type="file" id="videoFile" class="file-input" accept="video/*">
+
+            <button id="srtBtn">Open SRT</button>
+            <input type="file" id="srtFile" class="file-input" accept=".srt">
+
+            <div class="language-selector">
+                <span class="language-label">From:</span>
+                <select id="sourceLang">
+                    <option value="auto">Auto-detect</option>
+                    <option value="en">English</option>
+                    <option value="es">Spanish</option>
+                    <option value="fr">French</option>
+                    <option value="de">German</option>
+                    <option value="it">Italian</option>
+                    <option value="ja">Japanese</option>
+                    <option value="ko">Korean</option>
+                    <option value="zh">Chinese</option>
+                    <option value="ru">Russian</option>
+                </select>
+
+                <span class="language-label">To:</span>
+                <select id="targetLang">
+                    <option value="en">English</option>
+                    <option value="es">Spanish</option>
+                    <option value="fr">French</option>
+                    <option value="de">German</option>
+                    <option value="it">Italian</option>
+                    <option value="ja">Japanese</option>
+                    <option value="ko">Korean</option>
+                    <option value="zh">Chinese</option>
+                    <option value="ru">Russian</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="video-container" id="videoContainer">
+            <video id="videoPlayer" controls crossorigin="anonymous"></video>
+            <div class="subtitle-container" id="subtitleContainer">
+                <div class="subtitle-text" id="subtitleText"></div>
+                <div class="translation-text" id="translationText"></div>
+            </div>
+            <button class="toggle-translation" id="toggleTranslation">Show Translation</button>
+        </div>
+
+        <div class="debug-info" id="debugInfo">
+            Status: Waiting for files...
+        </div>
+    </div>
+
+    <script>
+        // DOM elements
+        const videoContainer = document.getElementById('videoContainer');
+        const videoPlayer = document.getElementById('videoPlayer');
+        const videoBtn = document.getElementById('videoBtn');
+        const videoFile = document.getElementById('videoFile');
+        const srtBtn = document.getElementById('srtBtn');
+        const srtFile = document.getElementById('srtFile');
+        const sourceLang = document.getElementById('sourceLang');
+        const targetLang = document.getElementById('targetLang');
+        const subtitleText = document.getElementById('subtitleText');
+        const translationText = document.getElementById('translationText');
+        const toggleTranslation = document.getElementById('toggleTranslation');
+        const debugInfo = document.getElementById('debugInfo');
+        const subtitleContainer = document.getElementById('subtitleContainer');
+
+        // State variables
+        let subtitles = [];
+        let translations = {};
+        let currentSubtitle = null;
+        let showTranslation = false;
+
+        // SRT parsing regex pattern as a string (to avoid linter issues)
+        const srtPattern = "(\\d+)\\r?\\n(\\d{2}:\\d{2}:\\d{2},\\d{3}) --> (\\d{2}:\\d{2}:\\d{2},\\d{3})\\r?\\n([\\s\\S]*?)(?=\\r?\\n\\r?\\n\\d+|$)";
+
+        // Event listeners - ensure they're properly attached
+        videoBtn.onclick = function () { videoFile.click(); };
+        srtBtn.onclick = function () { srtFile.click(); };
+
+        videoFile.onchange = handleVideoFile;
+        srtFile.onchange = handleSrtFile;
+
+        videoPlayer.ontimeupdate = updateSubtitle;
+        subtitleText.onclick = toggleTranslationDisplay;
+        toggleTranslation.onclick = toggleTranslationDisplay;
+
+        // Add event listeners for language changes to retranslate existing subtitles
+        sourceLang.onchange = function () { resetTranslations(); };
+        targetLang.onchange = function () { resetTranslations(); };
+
+        // Log setup success
+        debug("Event listeners attached successfully");
+
+        // Reset translations when language changes
+        function resetTranslations() {
+            translations = {};
+            debug("Translations reset due to language change");
+            // Retranslate current subtitle if visible
+            if (currentSubtitle) {
+                translateText(currentSubtitle.text, currentSubtitle.id);
+            }
+        }
+
+        // Handle video file selection
+        function handleVideoFile(event) {
+            const file = event.target.files[0];
+            if (file) {
+                // Convert MKV to compatible format if needed
+                const fileExtension = file.name.split('.').pop().toLowerCase();
+                debug("Video format: " + fileExtension);
+
+                const videoURL = URL.createObjectURL(file);
+                videoPlayer.src = videoURL;
+
+                // Ensure proper video attributes
+                videoPlayer.muted = false;
+                videoPlayer.volume = 1.0;
+                videoPlayer.crossOrigin = "anonymous";
+
+                // Add MKV support info
+                if (fileExtension === 'mkv') {
+                    debug("MKV format detected. Note: Audio support for MKV depends on browser capabilities. Try converting to MP4 if audio issues persist.");
+                }
+
+                // Force video to load all tracks
+                videoPlayer.load();
+
+                // Explicitly try to play after load
+                videoPlayer.onloadeddata = function () {
+                    // Reset to beginning
+                    videoPlayer.currentTime = 0;
+                    debug("Video loaded: " + file.name);
+                };
+
+                // Add error handler
+                videoPlayer.onerror = function () {
+                    debug("Error loading video: " + videoPlayer.error.message);
+                };
+            }
+        }
+
+        // Parse SRT file
+        function handleSrtFile(event) {
+            const file = event.target.files[0];
+            if (file) {
+                debug("Reading SRT file: " + file.name);
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    const content = e.target.result;
+                    try {
+                        subtitles = parseSRT(content);
+                        debug("Parsed " + subtitles.length + " subtitles successfully");
+                        // Clear any existing translations
+                        translations = {};
+                    } catch (error) {
+                        debug("Error parsing SRT: " + error.message);
+                    }
+                };
+                reader.onerror = function () {
+                    debug("Failed to read the file");
+                };
+                reader.readAsText(file);
+            }
+        }
+
+        // Parse SRT content into structured subtitles
+        function parseSRT(content) {
+            const srtItems = [];
+
+            // Create regex from string pattern
+            const regex = new RegExp(srtPattern, "g");
+
+            let match;
+            while ((match = regex.exec(content)) !== null) {
+                const startTime = timeToMilliseconds(match[2]);
+                const endTime = timeToMilliseconds(match[3]);
+                const text = match[4].trim();
+
+                srtItems.push({
+                    id: match[1],
+                    startTime,
+                    endTime,
+                    text
+                });
+            }
+
+            if (srtItems.length === 0) {
+                throw new Error("No subtitles found in the file. Check the format.");
+            }
+
+            return srtItems;
+        }
+
+        // Convert SRT time format to milliseconds
+        function timeToMilliseconds(timeString) {
+            const parts = timeString.split(/[:,]/);
+            const hours = parseInt(parts[0], 10);
+            const minutes = parseInt(parts[1], 10);
+            const seconds = parseInt(parts[2], 10);
+            const milliseconds = parseInt(parts[3], 10);
+
+            return hours * 3600000 + minutes * 60000 + seconds * 1000 + milliseconds;
+        }
+
+        // Update subtitle display based on current video time
+        function updateSubtitle() {
+            const currentTime = videoPlayer.currentTime * 1000;
+
+            // Find the current subtitle
+            const subtitle = subtitles.find(sub =>
+                currentTime >= sub.startTime && currentTime <= sub.endTime
+            );
+
+            // If subtitle changed or no subtitle
+            if (!subtitle) {
+                subtitleText.textContent = '';
+                translationText.textContent = '';
+                subtitleText.style.display = 'none';
+                translationText.style.display = 'none';
+                currentSubtitle = null;
+                return;
+            }
+
+            // Only update if it's a new subtitle
+            if (!currentSubtitle || currentSubtitle.id !== subtitle.id) {
+                currentSubtitle = subtitle;
+                subtitleText.textContent = subtitle.text;
+                subtitleText.style.display = 'inline-block';
+
+                // Check if we already have a translation
+                if (translations[subtitle.id]) {
+                    translationText.textContent = translations[subtitle.id];
+                    translationText.style.display = showTranslation ? 'inline-block' : 'none';
+                } else {
+                    // Get translation
+                    translateText(subtitle.text, subtitle.id);
+                }
+            }
+        }
+
+        // Toggle translation display
+        function toggleTranslationDisplay() {
+            showTranslation = !showTranslation;
+
+            if (showTranslation) {
+                toggleTranslation.textContent = 'Hide Translation';
+                if (currentSubtitle && translations[currentSubtitle.id]) {
+                    translationText.style.display = 'inline-block';
+                }
+            } else {
+                toggleTranslation.textContent = 'Show Translation';
+                translationText.style.display = 'none';
+            }
+
+            debug("Translation display: " + (showTranslation ? "Showing" : "Hidden"));
+        }
+
+        // Translate text using a free API
+        function translateText(text, subtitleId) {
+            const srcLang = sourceLang.value;
+            const tgtLang = targetLang.value;
+
+            debug("Translating from " + srcLang + " to " + tgtLang + ": " + text.substring(0, 30) + "...");
+
+            translateWithLibreTranslate(text, srcLang, tgtLang)
+                .then(translatedText => {
+                    translations[subtitleId] = translatedText;
+
+                    // Update display if this is the current subtitle
+                    if (currentSubtitle && currentSubtitle.id === subtitleId && showTranslation) {
+                        translationText.textContent = translatedText;
+                        translationText.style.display = 'inline-block';
+                    }
+                })
+                .catch(error => {
+                    debug("Translation error: " + error.message);
+                });
+        }
+
+        // Real translation API implementation
+        function translateWithLibreTranslate(text, sourceLang, targetLang) {
+            return fetch('http://localhost:5000/translate', {
+                method: 'POST',
+                body: JSON.stringify({
+                    q: text,
+                    source: sourceLang,
+                    target: targetLang
+                }),
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.translatedText) {
+                        return data.translatedText;
+                    } else {
+                        throw new Error('Translation failed');
+                    }
+                });
+        }
+
+        // Helper function for debug output
+        function debug(message) {
+            console.log(message);
+            debugInfo.textContent = message;
+        }
+
+        // Add listeners for fullscreen changes
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+        document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+        document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+        document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+        // Handle fullscreen change
+        function handleFullscreenChange() {
+            if (document.fullscreenElement ||
+                document.webkitFullscreenElement ||
+                document.mozFullScreenElement ||
+                document.msFullscreenElement) {
+
+                // Move subtitle container to fullscreen element
+                const fullscreenElement = document.fullscreenElement ||
+                    document.webkitFullscreenElement ||
+                    document.mozFullScreenElement ||
+                    document.msFullscreenElement;
+
+                // Ensure our UI stays in fullscreen mode
+                if (fullscreenElement === videoPlayer) {
+                    // Create a wrapper for fullscreen content if needed
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'fullscreen-wrapper';
+                    wrapper.style.position = 'relative';
+                    wrapper.style.width = '100%';
+                    wrapper.style.height = '100%';
+
+                    // Manually clone and append our UI to the fullscreen element
+                    const newSubtitleContainer = subtitleContainer.cloneNode(true);
+                    const newToggleButton = toggleTranslation.cloneNode(true);
+
+                    // Apply fullscreen-specific styling
+                    newSubtitleContainer.style.position = 'fixed';
+                    newSubtitleContainer.style.bottom = '120px';
+                    newSubtitleContainer.style.zIndex = '2147483647';
+
+                    newToggleButton.style.position = 'fixed';
+                    newToggleButton.style.bottom = '160px';
+                    newToggleButton.style.right = '20px';
+                    newToggleButton.style.zIndex = '2147483647';
+
+                    // Add event listener to the clone
+                    newToggleButton.addEventListener('click', toggleTranslationDisplay);
+
+                    // Append these elements directly to document body to ensure they're visible
+                    document.body.appendChild(newSubtitleContainer);
+                    document.body.appendChild(newToggleButton);
+
+                    // Store references to remove later
+                    window.fullscreenSubtitles = newSubtitleContainer;
+                    window.fullscreenToggle = newToggleButton;
+                }
+            } else {
+                // Remove any fullscreen UI elements we created
+                if (window.fullscreenSubtitles) {
+                    document.body.removeChild(window.fullscreenSubtitles);
+                    window.fullscreenSubtitles = null;
+                }
+                if (window.fullscreenToggle) {
+                    document.body.removeChild(window.fullscreenToggle);
+                    window.fullscreenToggle = null;
+                }
+            }
+        }
+
+        // Add custom fullscreen button
+        const fullscreenBtn = document.createElement('button');
+        fullscreenBtn.textContent = 'Enter Fullscreen';
+        fullscreenBtn.style.marginLeft = '10px';
+        fullscreenBtn.onclick = function () {
+            if (videoContainer.requestFullscreen) {
+                videoContainer.requestFullscreen();
+            } else if (videoContainer.webkitRequestFullscreen) {
+                videoContainer.webkitRequestFullscreen();
+            } else if (videoContainer.mozRequestFullScreen) {
+                videoContainer.mozRequestFullScreen();
+            } else if (videoContainer.msRequestFullscreen) {
+                videoContainer.msRequestFullscreen();
+            }
+        };
+
+        // Add the button to the controls
+        document.querySelector('.controls').appendChild(fullscreenBtn);
+    </script>
+</body>
+
+</html>
